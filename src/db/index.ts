@@ -1,4 +1,4 @@
-const sql = require("mssql");
+import * as sql from "mssql";
 
 const config = {
   dev: {
@@ -13,13 +13,30 @@ const config = {
 };
 
 export const connectDB = () => {
-  (async () => {
+  let pool = null;
+  if (pool) return pool;
+
+  return new Promise(async (resolve, reject) => {
     try {
-      let pool = await sql.connect(config.dev);
-      const result = await sql.query`select * from work`;
-      console.dir(result);
-    } catch (err) {
-      console.log("Error", err);
+      const connection = new sql.ConnectionPool(config.dev);
+
+      connection
+        .connect()
+        .then(connPool => {
+          resolve(connPool);
+        })
+        .catch(err => {
+          pool = null;
+          reject(err);
+        });
+
+      connection.on("close", () => {
+        pool = null;
+      });
+    } catch (error) {
+      console.log("Error", error);
     }
-  })();
+  });
 };
+
+export const connection = () => connectDB();

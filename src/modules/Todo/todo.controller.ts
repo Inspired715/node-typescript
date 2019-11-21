@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
-const sql = require("mssql");
+import * as sql from "mssql";
+import { connectDB } from "../../db";
 import { executeQuery } from "../../utils";
+import HTTP_STATUS from "../../constants/httpStatus";
 
 class TodoController {
   constructor() {}
@@ -10,11 +12,27 @@ class TodoController {
       params: { id }
     } = req;
 
-    const Q = `select * from todo_db.dbo.work where id=${id}`;
+    const Q = `select * from todo_db.dbo.work where id= @id`;
 
     try {
-      let result = await executeQuery(Q);
-      res.send(result);
+      connectDB()
+        .then(async (conn: any) => {
+          const ps = new sql.PreparedStatement(conn);
+          ps.input("id", sql.Int);
+          ps.prepare(Q, err => {
+            ps.execute(
+              {
+                id
+              },
+              (err, records) => {
+                res.send(HTTP_STATUS.SUCCESS.ok);
+              }
+            );
+          });
+        })
+        .then(err => {
+          throw new Error(`Error connecting ${err}`);
+        });
     } catch (error) {
       res.send(error);
     }
@@ -35,17 +53,33 @@ class TodoController {
       body: { name, done }
     } = req;
 
-    const Q = `INSERT INTO work (name, done) VALUES (${String(name)}, ${Boolean(
-      done
-    )})`;
-
-    console.log("Query", Q);
+    const Q = `INSERT INTO work (name, done) VALUES (@name, @done)`;
 
     try {
-      let result = await executeQuery(Q);
-      res.send(result);
+      connectDB()
+        .then(async (conn: any) => {
+          const ps = new sql.PreparedStatement(conn);
+          ps.input("name", sql.VarChar);
+          ps.input("done", sql.Bit);
+
+          ps.prepare(Q, err => {
+            if (err) throw err;
+            ps.execute(
+              {
+                name,
+                done
+              },
+              (err, records) => {
+                if (err) throw err;
+                res.send(HTTP_STATUS.SUCCESS.created);
+              }
+            );
+          });
+        })
+        .then(err => {
+          throw new Error(`Error connecting ${err}`);
+        });
     } catch (error) {
-      console.log("---error---", error);
       res.send(error);
     }
   }
@@ -55,12 +89,59 @@ class TodoController {
       body: { name, done },
       params: { id }
     } = req;
+
+    const Q = `UPDATE work SET name = @name, done=@done WHERE id=@id`;
+
+    try {
+      connectDB()
+        .then(async (conn: any) => {
+          const ps = new sql.PreparedStatement(conn);
+          ps.input("id", sql.Int);
+          ps.input("name", sql.VarChar);
+          ps.input("done", sql.Bit);
+          ps.prepare(Q, err => {
+            ps.execute(
+              {
+                id
+              },
+              (err, records) => {
+                res.send(records);
+              }
+            );
+          });
+        })
+        .then(err => {
+          throw new Error(`Error connecting ${err}`);
+        });
+    } catch (error) {
+      res.send(error);
+    }
   }
 
   async deleteTodo(req: Request, res: Response, next: NextFunction) {
-    const Q = `DELETE FROM work WHERE id=${req.params.id}`;
+    const {
+      params: { id }
+    } = req;
+    const Q = `DELETE FROM work WHERE id=@id`;
     try {
-      res.send(await executeQuery(Q));
+      connectDB()
+        .then(async (conn: any) => {
+          const ps = new sql.PreparedStatement(conn);
+          ps.input("id", sql.Int);
+          ps.prepare(Q, err => {
+            ps.execute(
+              {
+                id
+              },
+              (err, records) => {
+                res.send(records);
+              }
+            );
+          });
+        })
+        .then(err => {
+          throw new Error(`Error connecting ${err}`);
+        });
     } catch (error) {
       res.send(error);
     }
